@@ -1,0 +1,94 @@
+application:
+  subdomain: ghostfolio
+  multi_instance: false
+  upstreams:
+    - location: /package-licenses/
+      backend: file:///lzcapp/pkg/content/licenses/
+    - location: /
+      backend: http://ghostfolio:3333/
+
+services:
+  postgres:
+    image: docker.1ms.run/library/postgres:16-alpine
+    environment:
+      - POSTGRES_DB=ghostfolio-db
+      - POSTGRES_USER=ghostfolio
+      - |-
+        POSTGRES_PASSWORD={{ stable_secret "ghostfolio_db_password" | replace "\r" "" | replace "\n" "" }}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ghostfolio -d ghostfolio-db
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    binds:
+      - /lzcapp/var/pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: docker.1ms.run/library/redis:7-alpine
+    command:
+      - redis-server
+      - --requirepass
+      - |-
+        {{ stable_secret "ghostfolio_redis_password" | replace "\r" "" | replace "\n" "" }}
+    environment:
+      - |-
+        REDIS_PASSWORD={{ stable_secret "ghostfolio_redis_password" | replace "\r" "" | replace "\n" "" }}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    binds:
+      - /lzcapp/var/redisdata:/data
+
+  ghostfolio:
+    # upstream: ghostfolio/ghostfolio:3.96.0
+    image: docker.1ms.run/ghostfolio/ghostfolio:3.96.0
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - |-
+        DATABASE_URL=postgresql://ghostfolio:{{ stable_secret "ghostfolio_db_password" | replace "\r" "" | replace "\n" "" }}@postgres:5432/ghostfolio-db?connect_timeout=300
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - |-
+        REDIS_PASSWORD={{ stable_secret "ghostfolio_redis_password" | replace "\r" "" | replace "\n" "" }}
+      - |-
+        ACCESS_TOKEN_SALT={{ stable_secret "ghostfolio_token_salt" | replace "\r" "" | replace "\n" "" }}
+      - |-
+        JWT_SECRET_KEY={{ stable_secret "ghostfolio_jwt_secret" | replace "\r" "" | replace "\n" "" }}
+      - |-
+        HOST=0.0.0.0
+      - PORT=3333
+      - TZ=Asia/Shanghai
+      - NODE_ENV=production
+    binds:
+      - /lzcapp/var/data:/app/apps/api/prisma/data
+
+usage: |
+  Ghostfolio 是投资组合追踪工具：汇总股票、ETF 和加密货币持仓，看资产配置和收益。
+
+  使用方法：
+  1. 打开应用，第一次访问点注册，创建第一个账号（本应用自己的账号体系）。
+  2. 在"账户"里建账户（券商/钱包），再录入或导入交易记录。
+  3. 首页看总资产和收益；"分析"里看资产配置、地区分布和风险指标。
+
+  数据与安全：
+  - 数据库在 PostgreSQL（/lzcapp/var/pgdata），Redis 持久化在 /lzcapp/var/redisdata，
+    应用数据在 /lzcapp/var/data。卸载应用会一并删除，请定期备份。
+  - 数据库密码、Redis 密码、令牌盐值和 JWT 密钥全部由平台稳定密钥生成，每个部署不同。
+  - 本包不预置任何账号或默认口令；第一个账号由你注册创建。
+  - 应用经懒猫入口鉴权访问。
+
+  说明：
+  - 本应用包含三个容器（Ghostfolio + PostgreSQL + Redis），启动顺序由依赖关系保证。
+  - 行情数据来自公开数据源，需要服务器能访问外网才能刷新报价。
+  - 未配置邮件服务，找回密码等依赖邮件的功能不可用。
+  - 未做真机验证：注册登录、建账户、录交易、看报表以及重启后持久化均未在设备上实测。

@@ -1,0 +1,18 @@
+package: community.lazycat.app.ghostfolio
+name: Ghostfolio
+version: 0.0.0
+description: "Portfolio tracker for stocks, ETFs and crypto across multiple accounts and currencies."
+min_os_version: "1.5.0"
+homepage: https://github.com/ghostfolio/ghostfolio
+author: Ghostfolio
+license: AGPL-3.0
+permissions:
+  required:
+    - net.internet
+locales:
+  zh:
+    name: Ghostfolio
+    description: "投资组合追踪：汇总股票、ETF 和加密货币持仓，看资产配置、收益走势和风险指标。"
+  en:
+    name: Ghostfolio
+    description: "Portfolio tracker for stocks, ETFs and crypto across multiple accounts and currencies."
